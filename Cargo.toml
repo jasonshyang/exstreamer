@@ -1,0 +1,21 @@
+[package]
+name    = "exstreamer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait         = { version = "0.1" }
+futures-util        = { version = "0.3" }
+thiserror           = { version = "2" }
+tokio               = { version = "1", features = ["full"] }
+tokio-tungstenite   = { version = "0.27", features = ["native-tls"] }
+tokio-util          = { version = "0.7" }
+tracing             = { version = "0.1" }
+serde               = { version = "1", features = ["derive"] }
+serde_json          = { version = "1" }
+reqwest             = { version = "0.12" }
+bytes               = { version = "1" }
+tokio-stream = "0.1.17"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
