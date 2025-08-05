@@ -8,40 +8,34 @@ Supported exchanges:
 
 ## Usage
 
-See [examples/demo.rs](examples/demo.rs) for a full example.
-
+Usage is straightforward, use the `StreamBuilder` to create a stream, which returns a stream and a handler.
 ```rust
-use exstreamer::{
-    exchanges::{binance::BinanceConfig, bybit::BybitConfig},
-    exstreamer::Exstreamer,
-};
-use futures_util::StreamExt;
+let (mut binance_stream, binance_handler) = StreamBuilder::binance()
+    .trade("btcusdt".to_string())
+    .trade("ethusdt".to_string())
+    .connect()
+    .await
+    .expect("Failed to create Binance streamer");
 
-#[tokio::main]
-async fn main() {
-    let binance_config = BinanceConfig { symbol: "btcusdt".to_string() };
-    let bybit_config = BybitConfig { depth: 50, symbol: "BTCUSDT".to_string() };
-
-    let mut binance_streamer = Exstreamer::new_binance(binance_config, 1);
-    let mut binance_stream = binance_streamer.connect().await.unwrap();
-
-    let mut bybit_streamer = Exstreamer::new_bybit(bybit_config, 1);
-    let mut bybit_stream = bybit_streamer.connect().await.unwrap();
-
-    // Receive messages
-    loop {
-        tokio::select! {
-            message = binance_stream.next() => {
-                if let Some(msg) = message {
-                    println!("Binance: {:?}", msg);
-                }
-            }
-            message = bybit_stream.next() => {
-                if let Some(msg) = message {
-                    println!("Bybit: {:?}", msg);
-                }
-            }
-        }
-    }
-}
+let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
+    .trade("BTCUSDT".to_string())
+    .orderbook("ETHUSDT".to_string())
+    .connect()
+    .await
+    .expect("Failed to create Bybit streamer");
 ```
+
+Use the handler to manage the stream.
+```rust
+let new_sub = Subscription::new(
+    SubscriptionKind::Trade,
+    "solusdt",
+    None,
+    None,
+);
+binance_handler.subscribe(new_sub).expect("Failed to subscribe to new Binance subscription");
+```
+
+## Demo
+
+See [examples/demo.rs](examples/demo.rs) for a full demo.

@@ -1,15 +1,6 @@
 use serde::Deserialize;
 
-use crate::types::WsSubscription;
-
-pub const BYBIT_ENDPOINT: &str = "wss://stream.bybit.com/v5/public/spot";
-
 pub type BybitOrderEntry = Vec<String>; // [price, size]
-
-pub struct BybitConfig {
-    pub depth: u64,
-    pub symbol: String,
-}
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
@@ -121,50 +112,4 @@ pub struct BybitTradeData {
     /// Undocumented on Bybit documentation
     #[serde(rename = "RPI")]
     pub rpi: bool,
-}
-
-pub struct BybitSubscription {
-    id: u64,
-    config: BybitConfig,
-}
-
-impl WsSubscription for BybitSubscription {
-    type Message = BybitMessage;
-    type Config = BybitConfig;
-
-    fn new(config: BybitConfig, id: u64) -> Self {
-        Self { id, config }
-    }
-
-    fn name(&self) -> &'static str {
-        "bybit"
-    }
-
-    fn endpoint(&self) -> &'static str {
-        BYBIT_ENDPOINT
-    }
-
-    fn sub_msg(&self) -> String {
-        let ob_topic = format!("orderbook.{}.{}", self.config.depth, self.config.symbol);
-        let trade_topic = format!("publicTrade.{}", self.config.symbol);
-
-        serde_json::json!({
-            "op": "subscribe",
-            "args": [trade_topic, ob_topic],
-            "req_id": self.id.to_string()
-        })
-        .to_string()
-    }
-
-    fn unsub_msg(&mut self) -> String {
-        let ob_topic = format!("orderbook.{}.{}", self.config.depth, self.config.symbol);
-        let trade_topic = format!("publicTrade.{}", self.config.symbol);
-
-        serde_json::json!({
-            "op": "unsubscribe",
-            "args": [trade_topic, ob_topic],
-            "req_id": self.id.to_string()
-        })
-        .to_string()
-    }
 }

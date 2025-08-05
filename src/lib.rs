@@ -1,4 +1,6 @@
-pub mod exchanges;
-pub mod exstreamer;
+pub mod builder;
+pub mod error;
+pub mod models;
 pub mod transport;
-pub mod types;
+
+pub use builder::StreamBuilder;

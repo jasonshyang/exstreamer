@@ -1,27 +1,32 @@
 use exstreamer::{
-    exchanges::{binance::BinanceConfig, bybit::BybitConfig},
-    exstreamer::Exstreamer,
+    StreamBuilder,
+    models::{Subscription, SubscriptionKind},
 };
 use futures_util::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    let binance_config = BinanceConfig {
-        symbol: "btcusdt".to_string(),
-    };
+    let (mut binance_stream, binance_handler) = StreamBuilder::binance()
+        .trade("btcusdt".to_string())
+        .trade("ethusdt".to_string())
+        .connect()
+        .await
+        .expect("Failed to create Binance streamer");
 
-    let bybit_config = BybitConfig {
-        depth: 50,
-        symbol: "BTCUSDT".to_string(),
-    };
+    let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
+        .trade("BTCUSDT".to_string())
+        .orderbook("ETHUSDT".to_string())
+        .connect()
+        .await
+        .expect("Failed to create Bybit streamer");
 
-    let mut binance_streamer = Exstreamer::new_binance(binance_config, 1);
-    let mut binance_stream = binance_streamer.connect().await.unwrap();
-    let mut bybit_streamer = Exstreamer::new_bybit(bybit_config, 1);
-    let mut bybit_stream = bybit_streamer.connect().await.unwrap();
+    // Add a new subscription dynamically
+    let new_sub = Subscription::new(SubscriptionKind::Trade, "solusdt", None, None);
+    binance_handler
+        .subscribe(new_sub)
+        .expect("Failed to subscribe to new Binance subscription");
 
     // Receive messages
     loop {
@@ -49,9 +54,9 @@ async fn main() {
         }
     }
 
-    // Shutdown the streamers
-    tokio::try_join!(binance_streamer.shutdown(), bybit_streamer.shutdown())
+    // Shutdown the connections
+    tokio::try_join!(binance_handler.shutdown(), bybit_handler.shutdown())
         .expect("Failed to shutdown streamers");
 
-    tracing::info!("Streamers shut down successfully.");
+    tracing::info!("Streamers shut down gracefully.");
 }
