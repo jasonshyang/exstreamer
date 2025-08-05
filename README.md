@@ -11,15 +11,15 @@ Supported exchanges:
 Usage is straightforward, use the `StreamBuilder` to create a stream, which returns a stream and a handler.
 ```rust
 let (mut binance_stream, binance_handler) = StreamBuilder::binance()
-    .trade("btcusdt".to_string())
-    .trade("ethusdt".to_string())
+    .trade("btcusdt")
+    .trade("ethusdt")
     .connect()
     .await
     .expect("Failed to create Binance streamer");
 
 let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
-    .trade("BTCUSDT".to_string())
-    .orderbook("ETHUSDT".to_string())
+    .trade("btcusdt")
+    .orderbook("ethusdt")
     .connect()
     .await
     .expect("Failed to create Bybit streamer");
@@ -27,13 +27,16 @@ let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
 
 Use the handler to manage the stream.
 ```rust
-let new_sub = Subscription::new(
-    SubscriptionKind::Trade,
-    "solusdt",
-    None,
-    None,
-);
-binance_handler.subscribe(new_sub).expect("Failed to subscribe to new Binance subscription");
+// Add a new subscription
+let new_sub = Subscription::new(SubscriptionKind::Trade, "solusdt", None, None);
+binance_handler.subscribe(new_sub).unwrap();
+
+// Remove a subscription
+let remove_sub = Subscription::new(SubscriptionKind::Trade, "btcusdt", None, None);
+bybit_handler.unsubscribe(remove_sub).unwrap();
+
+// Shutdown the connection
+binance_handler.shutdown()
 ```
 
 ## Demo

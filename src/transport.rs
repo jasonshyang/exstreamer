@@ -29,6 +29,7 @@ pub struct ConnectionHandler {
 impl ConnectionHandler {
     /// Add a subscription
     pub fn subscribe(&self, subscription: Subscription) -> Result<(), ExStreamError> {
+        tracing::info!("Adding subscription: {:?}", subscription);
         self.ws_tx
             .send(TungsteniteMessage::Text(
                 subscription.to_subscription_msg(&self.source).into(),
@@ -39,9 +40,10 @@ impl ConnectionHandler {
 
     /// Remove a subscription
     pub fn unsubscribe(&self, subscription: Subscription) -> Result<(), ExStreamError> {
+        tracing::info!("Removing subscription: {:?}", subscription);
         self.ws_tx
             .send(TungsteniteMessage::Text(
-                subscription.to_subscription_msg(&self.source).into(),
+                subscription.to_unsubscription_msg(&self.source).into(),
             ))
             .map_err(|_| ExStreamError::StreamClosed)?;
         Ok(())
@@ -49,6 +51,7 @@ impl ConnectionHandler {
 
     /// Send a custom message to the WebSocket
     pub fn send_message(&self, message: TungsteniteMessage) -> Result<(), ExStreamError> {
+        tracing::info!("Sending custom message: {:?}", message);
         self.ws_tx
             .send(message)
             .map_err(|_| ExStreamError::StreamClosed)?;
@@ -57,6 +60,7 @@ impl ConnectionHandler {
 
     /// Gracefully shutdown the connection
     pub async fn shutdown(self) -> Result<(), ExStreamError> {
+        tracing::info!("Shutting down connection handler for source: {:?}", self.source);
         self.shutdown.cancel();
 
         tokio::try_join!(self.writer_task, self.connection_task)

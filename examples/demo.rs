@@ -9,15 +9,15 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let (mut binance_stream, binance_handler) = StreamBuilder::binance()
-        .trade("btcusdt".to_string())
-        .trade("ethusdt".to_string())
+        .trade("btcusdt")
+        .trade("ethusdt")
         .connect()
         .await
         .expect("Failed to create Binance streamer");
 
     let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
-        .trade("BTCUSDT".to_string())
-        .orderbook("ETHUSDT".to_string())
+        .trade("btcusdt")
+        .orderbook("ethusdt")
         .connect()
         .await
         .expect("Failed to create Bybit streamer");
@@ -27,6 +27,12 @@ async fn main() {
     binance_handler
         .subscribe(new_sub)
         .expect("Failed to subscribe to new Binance subscription");
+
+    // Remove a subscription dynamically
+    let remove_sub = Subscription::new(SubscriptionKind::Trade, "btcusdt", None, None);
+    bybit_handler
+        .unsubscribe(remove_sub)
+        .expect("Failed to unsubscribe from Bybit subscription");
 
     // Receive messages
     loop {
