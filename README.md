@@ -5,6 +5,11 @@
 Supported exchanges:
 - Bybit: Orderbook, Trade
 - Binance: Trade
+- Coinbase: Trade (Ticker)
+
+## To-dos
+- Handle reconnection
+- Add more exchanges
 
 ## Usage
 
@@ -15,25 +20,31 @@ let (mut binance_stream, binance_handler) = StreamBuilder::binance()
     .trade("ethusdt")
     .connect()
     .await
-    .expect("Failed to create Binance streamer");
+    .unwrap();
 
 let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
     .trade("btcusdt")
-    .orderbook("ethusdt")
+    .orderbook("ethusdt", 50)
     .connect()
     .await
-    .expect("Failed to create Bybit streamer");
+    .unwrap();
+
+let (mut coinbase_stream, coinbase_handler) = StreamBuilder::coinbase()
+    .trade("ETH-BTC")
+    .connect()
+    .await
+    .unwrap();
 ```
 
 Use the handler to manage the stream.
 ```rust
-// Add a new subscription
-let new_sub = Subscription::new(SubscriptionKind::Trade, "solusdt", None, None);
-binance_handler.subscribe(new_sub).unwrap();
+// Add a new subscription dynamically
+let new_sub_request = BinanceRequest::create_trade_request(true, "btcusdt", None);
+binance_handler.subscribe(new_sub_request).unwrap();
 
-// Remove a subscription
-let remove_sub = Subscription::new(SubscriptionKind::Trade, "btcusdt", None, None);
-bybit_handler.unsubscribe(remove_sub).unwrap();
+// Remove a subscription dynamically
+let remove_sub_request = BybitRequest::create_orderbook_request(false, "ethusdt", 50, None);
+bybit_handler.unsubscribe(remove_sub_request).unwrap();
 
 // Shutdown the connection
 binance_handler.shutdown()

@@ -1,6 +1,6 @@
-pub mod builder;
+pub mod builders;
 pub mod error;
 pub mod models;
 pub mod transport;
 
-pub use builder::StreamBuilder;
+pub use builders::StreamBuilder;

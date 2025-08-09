@@ -2,16 +2,13 @@ use std::fmt::Debug;
 use std::pin::Pin;
 
 use futures_util::{SinkExt as _, Stream, StreamExt as _};
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message as TungsteniteMessage};
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    error::ExStreamError,
-    models::{Subscription, SubscriptionSource},
-};
+use crate::error::ExStreamError;
 
 pub type WsMsgStream<M> = Pin<Box<dyn Stream<Item = Result<M, ExStreamError>> + Send + 'static>>;
 pub type ConnectionResult<M> = Result<(WsMsgStream<M>, ConnectionHandler), ExStreamError>;
@@ -19,7 +16,6 @@ pub type ConnectionResult<M> = Result<(WsMsgStream<M>, ConnectionHandler), ExStr
 #[derive(Debug)]
 /// Connection handlers that handles WebSocket connection lifecycle
 pub struct ConnectionHandler {
-    source: SubscriptionSource,
     ws_tx: mpsc::UnboundedSender<TungsteniteMessage>,
     writer_task: tokio::task::JoinHandle<()>,
     connection_task: tokio::task::JoinHandle<()>,
@@ -28,23 +24,21 @@ pub struct ConnectionHandler {
 
 impl ConnectionHandler {
     /// Add a subscription
-    pub fn subscribe(&self, subscription: Subscription) -> Result<(), ExStreamError> {
-        tracing::info!("Adding subscription: {:?}", subscription);
+    pub fn subscribe(&self, message: impl Serialize) -> Result<(), ExStreamError> {
+        let sub = serde_json::to_string(&message)?;
+        tracing::info!("Adding subscription: {:?}", sub);
         self.ws_tx
-            .send(TungsteniteMessage::Text(
-                subscription.to_subscription_msg(&self.source).into(),
-            ))
+            .send(TungsteniteMessage::Text(sub.into()))
             .map_err(|_| ExStreamError::StreamClosed)?;
         Ok(())
     }
 
     /// Remove a subscription
-    pub fn unsubscribe(&self, subscription: Subscription) -> Result<(), ExStreamError> {
-        tracing::info!("Removing subscription: {:?}", subscription);
+    pub fn unsubscribe(&self, message: impl Serialize) -> Result<(), ExStreamError> {
+        let unsub = serde_json::to_string(&message)?;
+        tracing::info!("Removing subscription: {:?}", unsub);
         self.ws_tx
-            .send(TungsteniteMessage::Text(
-                subscription.to_unsubscription_msg(&self.source).into(),
-            ))
+            .send(TungsteniteMessage::Text(unsub.into()))
             .map_err(|_| ExStreamError::StreamClosed)?;
         Ok(())
     }
@@ -60,7 +54,7 @@ impl ConnectionHandler {
 
     /// Gracefully shutdown the connection
     pub async fn shutdown(self) -> Result<(), ExStreamError> {
-        tracing::info!("Shutting down connection handler for source: {:?}", self.source);
+        tracing::info!("Shutting down connection handler");
         self.shutdown.cancel();
 
         tokio::try_join!(self.writer_task, self.connection_task)
@@ -81,13 +75,14 @@ impl ConnectionHandler {
 
 /// Establish a WebSocket connection with the given source and subscription messages
 pub async fn connect_ws<M>(
-    source: SubscriptionSource,
-    subscription_msg: impl Into<String>,
+    endpoint: impl Into<String>,
+    initial_message: impl Serialize,
 ) -> ConnectionResult<M>
 where
     M: DeserializeOwned + Debug + Send + 'static,
 {
-    let (ws_stream, _) = connect_async(source.endpoint()).await?;
+    let sub = serde_json::to_string(&initial_message)?;
+    let (ws_stream, _) = connect_async(endpoint.into()).await?;
     let (mut write, mut read) = ws_stream.split();
 
     // Message channels for forwarding messages to/from the WebSocket
@@ -98,9 +93,7 @@ where
     let shutdown = CancellationToken::new();
 
     // Send subscription message
-    write
-        .send(TungsteniteMessage::Text(subscription_msg.into().into()))
-        .await?;
+    write.send(TungsteniteMessage::Text(sub.into())).await?;
 
     // Spawn writer task
     let shutdown_signal = shutdown.clone();
@@ -135,7 +128,7 @@ where
                 message = read.next() => {
                     match message {
                         Some(Ok(TungsteniteMessage::Text(text))) => {
-                            tracing::trace!("Received text message: {}", text);
+                            tracing::debug!("Received text message: {}", text);
 
                             let msg = serde_json::from_str::<M>(&text)
                                 .map_err(ExStreamError::SerdeError);
@@ -194,7 +187,6 @@ where
     });
 
     let handler = ConnectionHandler {
-        source,
         ws_tx: outbound_tx,
         writer_task,
         connection_task,

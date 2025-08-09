@@ -18,4 +18,4 @@ bytes               = { version = "1" }
 tokio-stream = "0.1.17"
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-subscriber  = { version = "0.3", features = ["fmt"] }

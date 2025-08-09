@@ -1,6 +1,6 @@
 use exstreamer::{
     StreamBuilder,
-    models::{Subscription, SubscriptionKind},
+    models::{BinanceRequest, BybitRequest},
 };
 use futures_util::StreamExt;
 
@@ -13,26 +13,28 @@ async fn main() {
         .trade("ethusdt")
         .connect()
         .await
-        .expect("Failed to create Binance streamer");
+        .unwrap();
 
     let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
         .trade("btcusdt")
-        .orderbook("ethusdt")
+        .orderbook("ethusdt", 50)
         .connect()
         .await
-        .expect("Failed to create Bybit streamer");
+        .unwrap();
+
+    let (mut coinbase_stream, coinbase_handler) = StreamBuilder::coinbase()
+        .trade("ETH-BTC")
+        .connect()
+        .await
+        .unwrap();
 
     // Add a new subscription dynamically
-    let new_sub = Subscription::new(SubscriptionKind::Trade, "solusdt", None, None);
-    binance_handler
-        .subscribe(new_sub)
-        .expect("Failed to subscribe to new Binance subscription");
+    let new_sub = BinanceRequest::create_trade_request(true, "btcusdt", None);
+    binance_handler.subscribe(new_sub).unwrap();
 
     // Remove a subscription dynamically
-    let remove_sub = Subscription::new(SubscriptionKind::Trade, "btcusdt", None, None);
-    bybit_handler
-        .unsubscribe(remove_sub)
-        .expect("Failed to unsubscribe from Bybit subscription");
+    let remove_sub = BybitRequest::create_orderbook_request(false, "ethusdt", 50, None);
+    bybit_handler.unsubscribe(remove_sub).unwrap();
 
     // Receive messages
     loop {
@@ -53,6 +55,14 @@ async fn main() {
                     break;
                 }
             }
+            message = coinbase_stream.next() => {
+                if let Some(msg) = message {
+                    tracing::info!("Received Coinbase message: {:?}", msg);
+                } else {
+                    tracing::info!("No more messages to receive.");
+                    break;
+                }
+            }
             _ = tokio::signal::ctrl_c() => {
                 tracing::info!("Received Ctrl+C, shutting down...");
                 break;
@@ -61,8 +71,12 @@ async fn main() {
     }
 
     // Shutdown the connections
-    tokio::try_join!(binance_handler.shutdown(), bybit_handler.shutdown())
-        .expect("Failed to shutdown streamers");
+    tokio::try_join!(
+        binance_handler.shutdown(),
+        bybit_handler.shutdown(),
+        coinbase_handler.shutdown()
+    )
+    .expect("Failed to shutdown streamers");
 
     tracing::info!("Streamers shut down gracefully.");
 }

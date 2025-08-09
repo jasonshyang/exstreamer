@@ -1,6 +1,18 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use crate::models::{RequestKind, to_lower};
 
 pub type BybitOrderEntry = Vec<String>; // [price, size]
+
+#[derive(Serialize, Debug, Clone)]
+pub struct BybitRequest {
+    #[serde(rename = "op", with = "to_lower")]
+    pub kind: RequestKind,
+    #[serde(rename = "args")]
+    pub params: Vec<String>,
+    #[serde(rename = "req_id")]
+    pub id: Option<String>,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
@@ -112,4 +124,47 @@ pub struct BybitTradeData {
     /// Undocumented on Bybit documentation
     #[serde(rename = "RPI")]
     pub rpi: bool,
+}
+
+impl BybitRequest {
+    pub fn create_trade_request(is_sub: bool, symbol: impl Into<String>, id: Option<u64>) -> Self {
+        let args = vec![Self::create_trade_param(symbol)];
+        let kind = if is_sub {
+            RequestKind::Subscribe
+        } else {
+            RequestKind::Unsubscribe
+        };
+        BybitRequest {
+            kind,
+            params: args,
+            id: id.map(|id| id.to_string()),
+        }
+    }
+
+    pub fn create_orderbook_request(
+        is_sub: bool,
+        symbol: impl Into<String>,
+        depth: u64,
+        id: Option<u64>,
+    ) -> Self {
+        let args = vec![Self::create_orderbook_param(symbol, depth)];
+        let kind = if is_sub {
+            RequestKind::Subscribe
+        } else {
+            RequestKind::Unsubscribe
+        };
+        BybitRequest {
+            kind,
+            params: args,
+            id: id.map(|id| id.to_string()),
+        }
+    }
+
+    pub fn create_trade_param(symbol: impl Into<String>) -> String {
+        format!("publicTrade.{}", symbol.into().to_uppercase())
+    }
+
+    pub fn create_orderbook_param(symbol: impl Into<String>, depth: u64) -> String {
+        format!("orderbook.{}.{}", depth, symbol.into().to_uppercase())
+    }
 }

@@ -1,10 +1,27 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use crate::models::{RequestKind, to_upper};
+
+#[derive(Serialize, Debug, Clone)]
+pub struct BinanceRequest {
+    #[serde(rename = "method", with = "to_upper")]
+    pub kind: RequestKind,
+    pub params: Vec<String>,
+    pub id: Option<u64>,
+}
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BinanceMessage {
-    SubscriptionAck { result: Option<bool>, id: u64 },
+    SubscriptionAck(BinanceAck),
     Trade(BinanceTrade),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct BinanceAck {
+    pub result: Option<bool>,
+    pub id: Option<u64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -36,4 +53,20 @@ pub struct BinanceTrade {
     /// Ignore field
     #[serde(rename = "M")]
     pub ignore: bool,
+}
+
+impl BinanceRequest {
+    pub fn create_trade_request(is_sub: bool, symbol: impl Into<String>, id: Option<u64>) -> Self {
+        let params = vec![Self::create_trade_param(symbol)];
+        let kind = if is_sub {
+            RequestKind::Subscribe
+        } else {
+            RequestKind::Unsubscribe
+        };
+        BinanceRequest { kind, params, id }
+    }
+
+    pub fn create_trade_param(symbol: impl Into<String>) -> String {
+        format!("{}@trade", symbol.into().to_lowercase())
+    }
 }
