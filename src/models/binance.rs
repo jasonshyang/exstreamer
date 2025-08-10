@@ -56,17 +56,62 @@ pub struct BinanceTrade {
 }
 
 impl BinanceRequest {
-    pub fn create_trade_request(is_sub: bool, symbol: impl Into<String>, id: Option<u64>) -> Self {
-        let params = vec![Self::create_trade_param(symbol)];
-        let kind = if is_sub {
-            RequestKind::Subscribe
-        } else {
-            RequestKind::Unsubscribe
-        };
-        BinanceRequest { kind, params, id }
+    pub fn new(kind: RequestKind, params: Vec<impl Into<String>>) -> Self {
+        let params = params.into_iter().map(|p| p.into()).collect();
+
+        Self {
+            kind,
+            params,
+            id: None,
+        }
     }
 
-    pub fn create_trade_param(symbol: impl Into<String>) -> String {
+    pub fn new_subscribe() -> Self {
+        Self {
+            kind: RequestKind::Subscribe,
+            params: Vec::new(),
+            id: None,
+        }
+    }
+
+    pub fn new_unsubscribe() -> Self {
+        Self {
+            kind: RequestKind::Unsubscribe,
+            params: Vec::new(),
+            id: None,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
+    }
+
+    pub fn with_id(mut self, id: u64) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    pub fn with_trade(mut self, symbol: impl Into<String>) -> Self {
+        self.add_trade(symbol);
+        self
+    }
+
+    pub fn with_trades(mut self, symbols: Vec<impl Into<String>>) -> Self {
+        self.add_trades(symbols);
+        self
+    }
+
+    pub fn add_trade(&mut self, symbol: impl Into<String>) {
+        self.params.push(Self::format_trade(symbol));
+    }
+
+    pub fn add_trades(&mut self, symbols: Vec<impl Into<String>>) {
+        for symbol in symbols {
+            self.params.push(Self::format_trade(symbol));
+        }
+    }
+
+    fn format_trade(symbol: impl Into<String>) -> String {
         format!("{}@trade", symbol.into().to_lowercase())
     }
 }

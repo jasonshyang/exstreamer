@@ -1,48 +1,56 @@
 use crate::{
     error::ExStreamError,
-    models::{BybitMessage, BybitRequest, RequestKind},
+    models::{BybitMessage, BybitRequest},
     transport::{ConnectionResult, connect_ws},
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct BybitBuilder {
-    id: Option<u64>,
-    params: Vec<String>,
+    request: BybitRequest,
 }
 
 impl BybitBuilder {
     pub const ENDPOINT: &str = "wss://stream.bybit.com/v5/public/spot";
 
-    pub fn with_id(mut self, id: u64) -> Self {
-        self.id = Some(id);
+    pub fn with_id(mut self, id_str: String) -> Self {
+        self.request.id = Some(id_str);
         self
     }
 
-    /// Add a subscription to trade data for a specific symbol
-    pub fn trade(mut self, symbol: impl Into<String>) -> Self {
-        self.params.push(BybitRequest::create_trade_param(symbol));
+    pub fn with_trade(mut self, symbol: impl Into<String>) -> Self {
+        self.request.add_trade(symbol);
         self
     }
 
-    /// Add a subscription to order book data for a specific symbol and depth
-    pub fn orderbook(mut self, symbol: impl Into<String>, depth: u64) -> Self {
-        self.params
-            .push(BybitRequest::create_orderbook_param(symbol, depth));
+    pub fn with_trades(mut self, symbols: Vec<impl Into<String>>) -> Self {
+        self.request.add_trades(symbols);
+        self
+    }
+
+    pub fn with_orderbook(mut self, symbol: impl Into<String>, depth: u64) -> Self {
+        self.request.add_orderbook(symbol, depth);
+        self
+    }
+
+    pub fn with_orderbooks(mut self, symbols: Vec<impl Into<String>>, depth: u64) -> Self {
+        self.request.add_orderbooks(symbols, depth);
         self
     }
 
     // Connect and return the stream
     pub async fn connect(self) -> ConnectionResult<BybitMessage> {
-        if self.params.is_empty() {
+        if self.request.is_empty() {
             return Err(ExStreamError::EmptySubscriptionList);
         }
 
-        let request = BybitRequest {
-            kind: RequestKind::Subscribe,
-            params: self.params,
-            id: self.id.map(|id| id.to_string()),
-        };
+        connect_ws(Self::ENDPOINT, self.request).await
+    }
+}
 
-        connect_ws(Self::ENDPOINT, request).await
+impl Default for BybitBuilder {
+    fn default() -> Self {
+        BybitBuilder {
+            request: BybitRequest::new_subscribe(),
+        }
     }
 }

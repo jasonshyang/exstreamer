@@ -127,44 +127,86 @@ pub struct BybitTradeData {
 }
 
 impl BybitRequest {
-    pub fn create_trade_request(is_sub: bool, symbol: impl Into<String>, id: Option<u64>) -> Self {
-        let args = vec![Self::create_trade_param(symbol)];
-        let kind = if is_sub {
-            RequestKind::Subscribe
-        } else {
-            RequestKind::Unsubscribe
-        };
-        BybitRequest {
+    pub fn new(kind: RequestKind, params: Vec<impl Into<String>>) -> Self {
+        let params = params.into_iter().map(|p| p.into()).collect();
+
+        Self {
             kind,
-            params: args,
-            id: id.map(|id| id.to_string()),
+            params,
+            id: None,
         }
     }
 
-    pub fn create_orderbook_request(
-        is_sub: bool,
-        symbol: impl Into<String>,
-        depth: u64,
-        id: Option<u64>,
-    ) -> Self {
-        let args = vec![Self::create_orderbook_param(symbol, depth)];
-        let kind = if is_sub {
-            RequestKind::Subscribe
-        } else {
-            RequestKind::Unsubscribe
-        };
-        BybitRequest {
-            kind,
-            params: args,
-            id: id.map(|id| id.to_string()),
+    pub fn new_subscribe() -> Self {
+        Self {
+            kind: RequestKind::Subscribe,
+            params: Vec::new(),
+            id: None,
         }
     }
 
-    pub fn create_trade_param(symbol: impl Into<String>) -> String {
+    pub fn new_unsubscribe() -> Self {
+        Self {
+            kind: RequestKind::Unsubscribe,
+            params: Vec::new(),
+            id: None,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
+    }
+
+    pub fn with_id(mut self, id_str: String) -> Self {
+        self.id = Some(id_str);
+        self
+    }
+
+    pub fn with_trade(mut self, symbol: impl Into<String>) -> Self {
+        self.add_trade(symbol);
+        self
+    }
+
+    pub fn with_trades(mut self, symbols: Vec<impl Into<String>>) -> Self {
+        self.add_trades(symbols);
+        self
+    }
+
+    pub fn with_orderbook(mut self, symbol: impl Into<String>, depth: u64) -> Self {
+        self.add_orderbook(symbol, depth);
+        self
+    }
+
+    pub fn with_orderbooks(mut self, symbols: Vec<impl Into<String>>, depth: u64) -> Self {
+        self.add_orderbooks(symbols, depth);
+        self
+    }
+
+    pub fn add_trade(&mut self, symbol: impl Into<String>) {
+        self.params.push(Self::format_trade(symbol));
+    }
+
+    pub fn add_trades(&mut self, symbols: Vec<impl Into<String>>) {
+        for symbol in symbols {
+            self.add_trade(symbol);
+        }
+    }
+
+    pub fn add_orderbook(&mut self, symbol: impl Into<String>, depth: u64) {
+        self.params.push(Self::format_orderbook(symbol, depth));
+    }
+
+    pub fn add_orderbooks(&mut self, symbols: Vec<impl Into<String>>, depth: u64) {
+        for symbol in symbols {
+            self.add_orderbook(symbol, depth);
+        }
+    }
+
+    fn format_trade(symbol: impl Into<String>) -> String {
         format!("publicTrade.{}", symbol.into().to_uppercase())
     }
 
-    pub fn create_orderbook_param(symbol: impl Into<String>, depth: u64) -> String {
+    fn format_orderbook(symbol: impl Into<String>, depth: u64) -> String {
         format!("orderbook.{}.{}", depth, symbol.into().to_uppercase())
     }
 }

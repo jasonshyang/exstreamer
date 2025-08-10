@@ -9,31 +9,31 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let (mut binance_stream, binance_handler) = StreamBuilder::binance()
-        .trade("btcusdt")
-        .trade("ethusdt")
+        .with_trade("btcusdt")
+        .with_trade("ethusdt")
         .connect()
         .await
         .unwrap();
 
     let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
-        .trade("btcusdt")
-        .orderbook("ethusdt", 50)
+        .with_trade("btcusdt")
+        .with_orderbook("ethusdt", 50)
         .connect()
         .await
         .unwrap();
 
     let (mut coinbase_stream, coinbase_handler) = StreamBuilder::coinbase()
-        .trade("ETH-BTC")
+        .with_trade("ETH-BTC")
         .connect()
         .await
         .unwrap();
 
     // Add a new subscription dynamically
-    let new_sub = BinanceRequest::create_trade_request(true, "btcusdt", None);
+    let new_sub = BinanceRequest::new_subscribe().with_trade("solusdt");
     binance_handler.subscribe(new_sub).unwrap();
 
     // Remove a subscription dynamically
-    let remove_sub = BybitRequest::create_orderbook_request(false, "ethusdt", 50, None);
+    let remove_sub = BybitRequest::new_unsubscribe().with_orderbook("ethusdt", 50);
     bybit_handler.unsubscribe(remove_sub).unwrap();
 
     // Receive messages

@@ -15,15 +15,12 @@ pub struct CoinbaseRequest {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum CoinbaseMessage {
-    SubscriptionAck(CoinbaseAck),
+    SubscriptionAck {
+        #[serde(rename = "type")]
+        kind: String, // Should be "subscriptions"
+        channels: Vec<CoinbaseChannel>,
+    },
     Ticker(Box<CoinbaseTicker>),
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct CoinbaseAck {
-    #[serde(rename = "type")]
-    pub kind: String, // Should be "subscriptions"
-    pub channels: Vec<CoinbaseChannel>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,23 +52,72 @@ pub struct CoinbaseTicker {
 }
 
 impl CoinbaseRequest {
-    pub fn create_trade_request(is_sub: bool, channels: Vec<CoinbaseChannel>) -> Self {
-        let kind = if is_sub {
-            RequestKind::Subscribe
-        } else {
-            RequestKind::Unsubscribe
-        };
+    pub fn trade_request(kind: RequestKind, symbol: impl Into<String>) -> Self {
+        let channels = vec![Self::trade_param(symbol)];
         CoinbaseRequest {
             kind,
             params: channels,
-            product_ids: vec![], // Not needed as product_ids are specified in channels
+            product_ids: Vec::new(), // Not needed as product_ids are specified in channels
         }
     }
 
-    pub fn create_trade_param(symbol: impl Into<String>) -> CoinbaseChannel {
+    pub fn trade_param(symbol: impl Into<String>) -> CoinbaseChannel {
         CoinbaseChannel {
             name: "ticker".to_string(),
             product_ids: vec![symbol.into().to_uppercase()],
+        }
+    }
+
+    pub fn new(kind: RequestKind, params: Vec<CoinbaseChannel>) -> Self {
+        Self {
+            kind,
+            params,
+            product_ids: Vec::new(),
+        }
+    }
+
+    pub fn new_subscribe() -> Self {
+        Self {
+            kind: RequestKind::Subscribe,
+            params: Vec::new(),
+            product_ids: Vec::new(),
+        }
+    }
+
+    pub fn new_unsubscribe() -> Self {
+        Self {
+            kind: RequestKind::Unsubscribe,
+            params: Vec::new(),
+            product_ids: Vec::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
+    }
+
+    pub fn with_trade(mut self, symbol: impl Into<String>) -> Self {
+        self.add_trade(symbol);
+        self
+    }
+
+    pub fn with_trades(mut self, symbols: Vec<impl Into<String>>) -> Self {
+        self.add_trades(symbols);
+        self
+    }
+
+    pub fn add_trade(&mut self, symbol: impl Into<String>) {
+        let channel = CoinbaseChannel {
+            name: "ticker".to_string(),
+            product_ids: vec![symbol.into().to_uppercase()],
+        };
+
+        self.params.push(channel);
+    }
+
+    pub fn add_trades(&mut self, symbols: Vec<impl Into<String>>) {
+        for symbol in symbols {
+            self.add_trade(symbol);
         }
     }
 }
