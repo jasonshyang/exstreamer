@@ -1,6 +1,6 @@
 use exstreamer::{
     StreamBuilder,
-    models::{BinanceRequest, BybitRequest},
+    models::{BinanceRequest, BybitRequest, KrakenChannel},
 };
 use futures_util::StreamExt;
 
@@ -24,6 +24,12 @@ async fn main() {
 
     let (mut coinbase_stream, coinbase_handler) = StreamBuilder::coinbase()
         .with_trade("ETH-BTC")
+        .connect()
+        .await
+        .unwrap();
+
+    let (mut kraken_stream, kraken_handler) = StreamBuilder::kraken(KrakenChannel::Trade)
+        .with_symbol("BTC/USD")
         .connect()
         .await
         .unwrap();
@@ -63,6 +69,14 @@ async fn main() {
                     break;
                 }
             }
+            message = kraken_stream.next() => {
+                if let Some(msg) = message {
+                    tracing::info!("Received Kraken message: {:?}", msg);
+                } else {
+                    tracing::info!("No more messages to receive.");
+                    break;
+                }
+            }
             _ = tokio::signal::ctrl_c() => {
                 tracing::info!("Received Ctrl+C, shutting down...");
                 break;
@@ -74,7 +88,8 @@ async fn main() {
     tokio::try_join!(
         binance_handler.shutdown(),
         bybit_handler.shutdown(),
-        coinbase_handler.shutdown()
+        coinbase_handler.shutdown(),
+        kraken_handler.shutdown(),
     )
     .expect("Failed to shutdown streamers");
 

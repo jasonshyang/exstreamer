@@ -6,6 +6,7 @@ The library is still in active development, currently supported exchanges:
 - Bybit: Orderbook, Trade
 - Binance: Trade
 - Coinbase: Trade (Ticker)
+- Kraken: Trade
 
 ## To-dos
 - Handle reconnection
@@ -31,6 +32,13 @@ let (mut bybit_stream, bybit_handler) = StreamBuilder::bybit()
 
 let (mut coinbase_stream, coinbase_handler) = StreamBuilder::coinbase()
     .with_trade("ETH-BTC")
+    .connect()
+    .await
+    .unwrap();
+
+// Kraken stream is slightly different because you cannot subscribe to multiple channels in the same connection
+let (mut kraken_stream, kraken_handler) = StreamBuilder::kraken(KrakenChannel::Trade)
+    .with_symbol("BTC/USD")
     .connect()
     .await
     .unwrap();
