@@ -24,8 +24,12 @@ pub struct ConnectionHandler {
 
 impl ConnectionHandler {
     /// Add a subscription
-    pub fn subscribe(&self, message: impl Serialize) -> Result<(), ExStreamError> {
-        let sub = serde_json::to_string(&message)?;
+    pub fn subscribe(&self, message: impl Serialize + Debug) -> Result<(), ExStreamError> {
+        let sub = serde_json::to_string(&message).map_err(|e| ExStreamError::ParseError {
+            error: e,
+            raw_content: format!("{:?}", message),
+        })?;
+
         tracing::info!("Adding subscription: {:?}", sub);
         self.ws_tx
             .send(TungsteniteMessage::Text(sub.into()))
@@ -34,8 +38,12 @@ impl ConnectionHandler {
     }
 
     /// Remove a subscription
-    pub fn unsubscribe(&self, message: impl Serialize) -> Result<(), ExStreamError> {
-        let unsub = serde_json::to_string(&message)?;
+    pub fn unsubscribe(&self, message: impl Serialize + Debug) -> Result<(), ExStreamError> {
+        let unsub = serde_json::to_string(&message).map_err(|e| ExStreamError::ParseError {
+            error: e,
+            raw_content: format!("{:?}", message),
+        })?;
+
         tracing::info!("Removing subscription: {:?}", unsub);
         self.ws_tx
             .send(TungsteniteMessage::Text(unsub.into()))
@@ -76,12 +84,16 @@ impl ConnectionHandler {
 /// Establish a WebSocket connection with the given source and subscription messages
 pub async fn connect_ws<M>(
     endpoint: impl Into<String>,
-    initial_message: impl Serialize,
+    initial_message: impl Serialize + Debug,
 ) -> ConnectionResult<M>
 where
     M: DeserializeOwned + Debug + Send + 'static,
 {
-    let sub = serde_json::to_string(&initial_message)?;
+    let sub = serde_json::to_string(&initial_message).map_err(|e| ExStreamError::ParseError {
+        error: e,
+        raw_content: format!("{:?}", initial_message),
+    })?;
+
     let (ws_stream, _) = connect_async(endpoint.into()).await?;
     let (mut write, mut read) = ws_stream.split();
 
@@ -131,7 +143,10 @@ where
                             tracing::debug!("Received text message: {}", text);
 
                             let msg = serde_json::from_str::<M>(&text)
-                                .map_err(ExStreamError::SerdeError);
+                                .map_err(|e| ExStreamError::ParseError {
+                                    error: e,
+                                    raw_content: text.to_string(),
+                                });
                             tracing::trace!("Parsed message: {:?}", msg);
 
                             if inbound_tx.send(msg).is_err() {

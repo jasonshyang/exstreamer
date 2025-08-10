@@ -9,8 +9,11 @@ pub enum ExStreamError {
     EmptySubscriptionList,
     #[error("Unsupported message error: {0}")]
     UnsupportedMessage(String),
-    #[error("Serde error: {0}")]
-    SerdeError(#[from] serde_json::Error),
+    #[error("Failed to parse JSON message: {error}. Raw content: {raw_content}")]
+    ParseError {
+        error: serde_json::Error,
+        raw_content: String,
+    },
     #[error("Tungstenite error: {0}")]
     TungsteniteError(#[from] Box<tungstenite::Error>),
     #[error("Task error: {0}")]
