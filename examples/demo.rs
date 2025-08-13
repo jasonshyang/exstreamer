@@ -29,6 +29,7 @@ async fn main() {
         .unwrap();
 
     let (mut kraken_stream, kraken_handler) = StreamBuilder::kraken(KrakenChannel::Trade)
+        .with_id(1)
         .with_symbol("BTC/USD")
         .connect()
         .await

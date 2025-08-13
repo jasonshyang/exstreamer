@@ -13,9 +13,13 @@ tokio-util          = { version = "0.7" }
 tracing             = { version = "0.1" }
 serde               = { version = "1", features = ["derive"] }
 serde_json          = { version = "1" }
-reqwest             = { version = "0.12" }
 bytes               = { version = "1" }
 tokio-stream = "0.1.17"
 
 [dev-dependencies]
 tracing-subscriber  = { version = "0.3", features = ["fmt"] }
+hmac                = { version = "0.12" }
+sha2                = { version = "0.10" }
+base64              = { version = "0.22" }
+reqwest             = { version = "0.12" }
+dotenvy             = { version = "0.15" }
