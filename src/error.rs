@@ -7,6 +7,8 @@ use tokio_tungstenite::tungstenite;
 pub enum ExStreamError {
     #[error("Empty subscription list")]
     EmptySubscriptionList,
+    #[error("Missing auth for connection")]
+    MissingAuth,
     #[error("Unsupported message error: {0}")]
     UnsupportedMessage(String),
     #[error("Failed to parse JSON message: {error}. Raw content: {raw_content}")]

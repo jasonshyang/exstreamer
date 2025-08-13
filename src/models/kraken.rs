@@ -3,18 +3,19 @@ use serde::{Deserialize, Serialize};
 use crate::models::{RequestKind, to_lower};
 
 #[derive(Serialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum KrakenRequest {
-    Trade(KrakenTradeRequest),
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub struct KrakenTradeRequest {
+pub struct KrakenRequest {
     #[serde(rename = "method", with = "to_lower")]
     pub kind: RequestKind,
-    pub params: KrakenTradeParams,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: KrakenParams,
+    #[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum KrakenParams {
+    Trade(KrakenTradeParams),
+    L3(KrakenL3Params),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -28,13 +29,25 @@ pub struct KrakenTradeParams {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KrakenL3Params {
+    /// This must be "level3" for L3 requests
+    channel: KrakenChannel,
+    pub symbol: Vec<String>,
+    /// Possible values: [10, 100, 1000]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u64>,
+    /// Request a snapshot after subscribing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<bool>,
+    pub token: String, // Authentication token
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum KrakenChannel {
     Trade,
-    #[serde(rename = "book")]
-    OrderbookL2,
     #[serde(rename = "level3")]
-    OrderbookL3,
+    L3,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -43,25 +56,39 @@ pub enum KrakenMessage {
     SubscriptionAck {
         #[serde(rename = "method", with = "to_lower")]
         kind: RequestKind,
-        result: KrakenTradeParams,
+        result: KrakenParams,
         success: bool,
         error: String,
         time_in: String,
         time_out: String,
         req_id: Option<u64>,
     },
-    Trade(KrakenTrade),
+    Event(KrakenEvent),
     Heartbeat {
         channel: String,
     },
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct KrakenTrade {
+pub struct KrakenEvent {
     pub channel: KrakenChannel,
     #[serde(rename = "type")]
-    pub kind: String, // "snapshot" or "update"
-    pub data: Vec<KrakenTradeData>,
+    pub kind: KrakenEventKind,
+    pub data: Vec<KrakenData>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum KrakenEventKind {
+    Snapshot,
+    Update,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum KrakenData {
+    Trade(KrakenTradeData),
+    Book(KrakenBook),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -77,95 +104,73 @@ pub struct KrakenTradeData {
     pub timestamp: String, // Format: RFC3339
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct KrakenBook {
+    pub symbol: String,
+    pub checksum: u64,
+    pub bids: Vec<KrakenOrderEntry>,
+    pub asks: Vec<KrakenOrderEntry>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct KrakenOrderEntry {
+    pub order_id: String,
+    #[serde(rename = "limit_price")]
+    pub price: f64,
+    #[serde(rename = "order_qty")]
+    pub size: f64,
+    pub timestamp: String, // Format: RFC3339
+}
+
 impl KrakenRequest {
-    pub fn new(channel: KrakenChannel, kind: RequestKind, params: KrakenTradeParams) -> Self {
-        match channel {
-            KrakenChannel::Trade => KrakenRequest::Trade(KrakenTradeRequest {
-                kind,
-                params,
-                id: None,
-            }),
-            KrakenChannel::OrderbookL2 => unimplemented!("Orderbook L2 not implemented yet"),
-            KrakenChannel::OrderbookL3 => unimplemented!("Orderbook L3 not implemented yet"),
+    pub fn new(kind: RequestKind, params: KrakenParams) -> Self {
+        KrakenRequest {
+            kind,
+            params,
+            id: None,
         }
     }
 
     pub fn new_subscribe(channel: KrakenChannel) -> Self {
-        match channel {
-            KrakenChannel::Trade => KrakenRequest::Trade(KrakenTradeRequest::new_subscribe()),
-            KrakenChannel::OrderbookL2 => unimplemented!("Orderbook L2 not implemented yet"),
-            KrakenChannel::OrderbookL3 => unimplemented!("Orderbook L3 not implemented yet"),
-        }
-    }
-
-    pub fn new_unsubscribe(channel: KrakenChannel) -> Self {
-        match channel {
-            KrakenChannel::Trade => KrakenRequest::Trade(KrakenTradeRequest::new_unsubscribe()),
-            KrakenChannel::OrderbookL2 => unimplemented!("Orderbook L2 not implemented yet"),
-            KrakenChannel::OrderbookL3 => unimplemented!("Orderbook L3 not implemented yet"),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            KrakenRequest::Trade(req) => req.is_empty(),
-        }
-    }
-
-    pub fn with_id(self, id: u64) -> Self {
-        match self {
-            KrakenRequest::Trade(req) => req.with_id(id).into(),
-        }
-    }
-
-    pub fn with_symbol(self, symbol: impl Into<String>) -> Self {
-        match self {
-            KrakenRequest::Trade(req) => req.with_symbol(symbol).into(),
-        }
-    }
-
-    pub fn with_symbols(self, symbols: Vec<impl Into<String>>) -> Self {
-        match self {
-            KrakenRequest::Trade(req) => req.with_symbols(symbols).into(),
-        }
-    }
-
-    pub fn add_symbol(&mut self, symbol: impl Into<String>) {
-        match self {
-            KrakenRequest::Trade(req) => req.add_symbol(symbol),
-        }
-    }
-
-    pub fn add_symbols(&mut self, symbols: Vec<impl Into<String>>) {
-        match self {
-            KrakenRequest::Trade(req) => req.add_symbols(symbols),
-        }
-    }
-}
-
-impl KrakenTradeRequest {
-    pub fn new_subscribe() -> Self {
-        let params = KrakenTradeParams {
-            channel: KrakenChannel::Trade,
-            symbol: Vec::new(),
-            snapshot: None,
+        let params = match channel {
+            KrakenChannel::Trade => KrakenParams::Trade(KrakenTradeParams {
+                channel,
+                symbol: Vec::new(),
+                snapshot: None,
+            }),
+            KrakenChannel::L3 => KrakenParams::L3(KrakenL3Params {
+                channel,
+                symbol: Vec::new(),
+                depth: None,
+                snapshot: Some(true),
+                token: String::new(), // Token should be set later
+            }),
         };
 
-        Self {
+        KrakenRequest {
             kind: RequestKind::Subscribe,
             params,
             id: None,
         }
     }
 
-    pub fn new_unsubscribe() -> Self {
-        let params = KrakenTradeParams {
-            channel: KrakenChannel::Trade,
-            symbol: Vec::new(),
-            snapshot: None,
+    pub fn new_unsubscribe(channel: KrakenChannel) -> Self {
+        let params = match channel {
+            KrakenChannel::Trade => KrakenParams::Trade(KrakenTradeParams {
+                channel,
+                symbol: Vec::new(),
+                snapshot: None,
+            }),
+            KrakenChannel::L3 => KrakenParams::L3(KrakenL3Params {
+                channel,
+                symbol: Vec::new(),
+                depth: None,
+                snapshot: Some(true),
+                token: String::new(), // Token should be set later
+            }),
         };
 
-        Self {
+        KrakenRequest {
             kind: RequestKind::Unsubscribe,
             params,
             id: None,
@@ -173,37 +178,59 @@ impl KrakenTradeRequest {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.params.symbol.is_empty()
+        match self.params {
+            KrakenParams::Trade(ref params) => params.symbol.is_empty(),
+            KrakenParams::L3(ref params) => params.symbol.is_empty(),
+        }
     }
 
-    pub fn with_id(mut self, id: u64) -> Self {
+    pub fn is_missing_auth(&self) -> bool {
+        if let KrakenParams::L3(ref params) = self.params {
+            params.token.is_empty()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_auth_required(&self) -> bool {
+        matches!(self.params, KrakenParams::L3(_))
+    }
+
+    pub fn set_id(&mut self, id: u64) {
         self.id = Some(id);
-        self
     }
 
-    pub fn with_symbol(mut self, symbol: impl Into<String>) -> Self {
-        self.add_symbol(symbol);
-        self
+    pub fn set_token(&mut self, token: String) {
+        if let KrakenParams::L3(ref mut params) = self.params {
+            params.token = token;
+        }
     }
 
-    pub fn with_symbols(mut self, symbols: Vec<impl Into<String>>) -> Self {
-        self.add_symbols(symbols);
-        self
+    pub fn set_depth(&mut self, depth: u64) {
+        if let KrakenParams::L3(ref mut params) = self.params {
+            params.depth = Some(depth);
+        }
     }
 
     pub fn add_symbol(&mut self, symbol: impl Into<String>) {
-        self.params.symbol.push(symbol.into().to_uppercase());
+        match &mut self.params {
+            KrakenParams::Trade(params) => params.symbol.push(symbol.into().to_uppercase()),
+            KrakenParams::L3(params) => params.symbol.push(symbol.into().to_uppercase()),
+        }
     }
 
     pub fn add_symbols(&mut self, symbols: Vec<impl Into<String>>) {
-        for symbol in symbols {
-            self.params.symbol.push(symbol.into().to_uppercase());
+        match &mut self.params {
+            KrakenParams::Trade(params) => {
+                for symbol in symbols {
+                    params.symbol.push(symbol.into().to_uppercase());
+                }
+            }
+            KrakenParams::L3(params) => {
+                for symbol in symbols {
+                    params.symbol.push(symbol.into().to_uppercase());
+                }
+            }
         }
-    }
-}
-
-impl From<KrakenTradeRequest> for KrakenRequest {
-    fn from(req: KrakenTradeRequest) -> Self {
-        KrakenRequest::Trade(req)
     }
 }
